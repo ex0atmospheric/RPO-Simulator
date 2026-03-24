@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hostile RPO 6DOF Simulator</title>
+<title>RPO 6DOF Simulator</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #000; color: #00ff88; font-family: 'Courier New', monospace; overflow: hidden; }
@@ -169,7 +169,7 @@ input[type="range"]::-webkit-slider-thumb {
 <div id="telemetry-panel">
   <h2>// TELEMETRY</h2>
   <div class="telem-group">
-    <h3>CHASER (HOSTILE)</h3>
+    <h3>CHASER (QUESTIONABLE INTENT)</h3>
     <div class="telem-row"><span class="telem-label">X (R-bar):</span><span class="telem-value" id="t-cx">--</span></div>
     <div class="telem-row"><span class="telem-label">Y (V-bar):</span><span class="telem-value" id="t-cy">--</span></div>
     <div class="telem-row"><span class="telem-label">Z (H-bar):</span><span class="telem-value" id="t-cz">--</span></div>
@@ -259,7 +259,7 @@ const SCENARIOS = [
     nation: 'russia',
     nationLabel: 'RUSSIA',
     altitude: 35786,
-    description: 'Russia\'s Luch (Olymp-K) satellite conducted unprecedented proximity operations in geostationary orbit, parking itself between Intelsat 7 and Intelsat 901. This was one of the first documented cases of hostile GEO-stalking, raising concerns about signal interception.',
+    description: 'Russia\'s Luch (Olymp-K) satellite conducted unprecedented proximity operations in geostationary orbit, parking itself between Intelsat 7 and Intelsat 901. This was one of the first documented cases of GEO-stalking, raising concerns about signal interception.',
     chaserName: 'LUCH (OLYMP-K)',
     targetName: 'INTELSAT-901',
     phases: [
@@ -1123,7 +1123,7 @@ function render() {
     const targetOrbitRate = getMeanMotion(s.scenario.altitude);
     drawSatellite([0,0,0], [0, s.time * targetOrbitRate * 0.01, 0], satScale, [0.2, 0.6, 1.0]);
 
-    // Chaser (hostile) - red - note: swap y/z for display
+    // Chaser - red - note: swap y/z for display
     const chaserPos = [s.cx, s.cz, s.cy];
     drawSatellite(chaserPos, [s.roll, s.pitch, s.yaw], satScale*0.7, [1.0, 0.15, 0.15]);
 
@@ -1263,7 +1263,7 @@ function updateTelemetry() {
   if (threat < 0.15) { tt.textContent = 'NOMINAL'; tt.className = 'telem-value'; }
   else if (threat < 0.35) { tt.textContent = 'ELEVATED - PROXIMITY'; tt.className = 'telem-value warning'; }
   else if (threat < 0.6) { tt.textContent = 'HIGH - CLOSE APPROACH'; tt.className = 'telem-value warning'; }
-  else if (threat < 0.9) { tt.textContent = 'CRITICAL - HOSTILE INTENT'; tt.className = 'telem-value critical'; }
+  else if (threat < 0.9) { tt.textContent = 'CRITICAL - INTENT'; tt.className = 'telem-value critical'; }
   else { tt.textContent = s.debris.length > 0 ? 'KINETIC IMPACT' : 'ENGAGEMENT ZONE'; tt.className = 'telem-value critical'; }
 
   // Phase indicator
@@ -1290,23 +1290,3 @@ function frame() {
     render();
 
     telemTimer += dt;
-    if (telemTimer > 0.1) {
-      telemTimer = 0;
-      updateTelemetry();
-    }
-  } catch(e) {
-    console.error('Frame error:', e);
-  }
-}
-
-// Start with first scenario loaded and auto-playing
-loadScenario('kosmos2542');
-simState.running = true;
-document.getElementById('btn-play').innerHTML = '&#10074;&#10074; PAUSE';
-document.getElementById('btn-play').classList.add('active');
-
-// Main loop using setInterval for guaranteed execution
-setInterval(frame, 16);
-</script>
-</body>
-</html>
