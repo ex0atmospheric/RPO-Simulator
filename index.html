@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hostile RPO 6DOF Simulator</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; color: #00ff88; font-family: 'Courier New', monospace; overflow: hidden; }
+
+#canvas3d { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* HUD Overlay */
+#hud { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+#hud-top-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 16px; background: rgba(0,0,0,0.85);
+  border-bottom: 1px solid #00ff8844; pointer-events: auto;
+}
+#hud-top-bar h1 { font-size: 14px; letter-spacing: 3px; color: #ff3333; }
+#hud-top-bar .classification { color: #ff0000; font-weight: bold; font-size: 12px; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+/* Scenario Panel */
+#scenario-panel {
+  position: fixed; top: 45px; left: 12px; width: 320px;
+  background: rgba(0,10,5,0.92); border: 1px solid #00ff8844;
+  border-radius: 4px; padding: 12px; pointer-events: auto; z-index: 20;
+  max-height: calc(100vh - 60px); overflow-y: auto;
+}
+#scenario-panel h2 { font-size: 12px; color: #00ff88; margin-bottom: 8px; letter-spacing: 2px; }
+.scenario-btn {
+  display: block; width: 100%; padding: 8px 10px; margin: 4px 0;
+  background: rgba(0,40,20,0.8); border: 1px solid #00884466;
+  color: #00ff88; font-family: 'Courier New', monospace; font-size: 11px;
+  cursor: pointer; text-align: left; border-radius: 3px; transition: all 0.2s;
+}
+.scenario-btn:hover { background: rgba(0,80,40,0.8); border-color: #00ff88; }
+.scenario-btn.active { background: rgba(0,100,50,0.6); border-color: #00ff88; box-shadow: 0 0 8px #00ff8844; }
+.scenario-btn .year { color: #ffaa00; font-size: 10px; }
+.scenario-btn .nation { font-size: 10px; }
+.scenario-btn .nation.russia { color: #ff4444; }
+.scenario-btn .nation.china { color: #ff6600; }
+.scenario-btn .nation.commercial { color: #00ccff; }
+.scenario-desc {
+  font-size: 10px; color: #88bbaa; margin: 8px 0; padding: 8px;
+  background: rgba(0,20,10,0.8); border-left: 2px solid #00ff8844;
+  line-height: 1.5;
+}
+
+/* Telemetry Panel */
+#telemetry-panel {
+  position: fixed; top: 45px; right: 12px; width: 280px;
+  background: rgba(0,10,5,0.92); border: 1px solid #00ff8844;
+  border-radius: 4px; padding: 12px; pointer-events: auto; z-index: 20;
+}
+#telemetry-panel h2 { font-size: 12px; color: #00ff88; margin-bottom: 8px; letter-spacing: 2px; }
+.telem-group { margin-bottom: 10px; }
+.telem-group h3 { font-size: 10px; color: #88aa99; margin-bottom: 4px; border-bottom: 1px solid #00442233; padding-bottom: 2px; }
+.telem-row { display: flex; justify-content: space-between; font-size: 11px; padding: 1px 0; }
+.telem-label { color: #668877; }
+.telem-value { color: #00ff88; font-weight: bold; }
+.telem-value.warning { color: #ffaa00; }
+.telem-value.critical { color: #ff3333; }
+
+/* Controls */
+#controls-panel {
+  position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,10,5,0.92); border: 1px solid #00ff8844;
+  border-radius: 4px; padding: 10px 16px; pointer-events: auto; z-index: 20;
+  display: flex; gap: 12px; align-items: center;
+}
+.ctrl-btn {
+  padding: 6px 14px; background: rgba(0,40,20,0.8); border: 1px solid #00884466;
+  color: #00ff88; font-family: 'Courier New', monospace; font-size: 11px;
+  cursor: pointer; border-radius: 3px; transition: all 0.2s;
+}
+.ctrl-btn:hover { background: rgba(0,80,40,0.8); border-color: #00ff88; }
+.ctrl-btn.active { background: rgba(0,100,50,0.6); border-color: #00ff88; }
+#time-display { font-size: 12px; color: #ffaa00; min-width: 80px; text-align: center; }
+#speed-display { font-size: 10px; color: #668877; }
+.slider-container { display: flex; align-items: center; gap: 6px; }
+.slider-container label { font-size: 10px; color: #668877; }
+input[type="range"] {
+  -webkit-appearance: none; width: 80px; height: 4px;
+  background: #004422; border-radius: 2px; outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 12px; height: 12px;
+  background: #00ff88; border-radius: 50%; cursor: pointer;
+}
+
+/* Threat Assessment */
+#threat-bar {
+  position: fixed; bottom: 70px; left: 12px; width: 200px;
+  background: rgba(0,10,5,0.92); border: 1px solid #00ff8844;
+  border-radius: 4px; padding: 10px; pointer-events: none; z-index: 20;
+}
+#threat-bar h3 { font-size: 10px; color: #ff3333; margin-bottom: 6px; letter-spacing: 2px; }
+#threat-level-bar { width: 100%; height: 8px; background: #002211; border-radius: 4px; overflow: hidden; }
+#threat-fill { height: 100%; width: 0%; border-radius: 4px; transition: width 0.3s, background 0.3s; }
+#threat-text { font-size: 11px; margin-top: 4px; }
+
+/* Phase indicator */
+#phase-indicator {
+  position: fixed; top: 45px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,10,5,0.92); border: 1px solid #00ff8844;
+  border-radius: 4px; padding: 8px 20px; z-index: 20; text-align: center;
+  pointer-events: none;
+}
+#phase-indicator .phase-name { font-size: 16px; color: #ffaa00; letter-spacing: 3px; }
+#phase-indicator .phase-sub { font-size: 10px; color: #668877; margin-top: 2px; }
+
+/* Toggle rows */
+.toggle-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.toggle-switch {
+  width: 32px; height: 16px; background: #333; border-radius: 8px;
+  position: relative; cursor: pointer; transition: background 0.3s;
+}
+.toggle-switch.on { background: #00884466; }
+.toggle-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; background: #668877; border-radius: 50%; transition: all 0.3s;
+}
+.toggle-switch.on::after { left: 18px; background: #00ff88; }
+
+/* Scrollbar */
+#scenario-panel::-webkit-scrollbar { width: 4px; }
+#scenario-panel::-webkit-scrollbar-track { background: #001a0d; }
+#scenario-panel::-webkit-scrollbar-thumb { background: #00ff8844; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas3d"></canvas>
+
+<div id="hud">
+  <div id="hud-top-bar">
+    <span class="classification">EDUCATIONAL SIMULATION</span>
+    <h1>RPO 6DOF SIMULATOR</h1>
+    <span class="classification">NOT FOR OPERATIONAL USE</span>
+  </div>
+</div>
+
+<div id="phase-indicator">
+  <div class="phase-name" id="phase-name-display">SELECT SCENARIO</div>
+  <div class="phase-sub" id="phase-sub-display">Choose from historical events</div>
+</div>
+
+<div id="scenario-panel">
+  <h2>// HISTORICAL SCENARIOS</h2>
+  <div id="scenario-buttons"></div>
+  <div id="scenario-description" class="scenario-desc">Select a scenario to begin simulation.</div>
+  <div class="toggle-row" style="pointer-events:auto">
+    <div id="trail-toggle" class="toggle-switch on" onclick="toggleTrails()"></div>
+    <span style="font-size:10px;color:#668877">Orbital Trails</span>
+  </div>
+  <div class="toggle-row" style="pointer-events:auto">
+    <div id="grid-toggle" class="toggle-switch on" onclick="toggleGrid()"></div>
+    <span style="font-size:10px;color:#668877">Reference Grid</span>
+  </div>
+  <div class="toggle-row" style="pointer-events:auto">
+    <div id="vector-toggle" class="toggle-switch on" onclick="toggleVectors()"></div>
+    <span style="font-size:10px;color:#668877">Velocity Vectors</span>
+  </div>
+</div>
+
+<div id="telemetry-panel">
+  <h2>// TELEMETRY</h2>
+  <div class="telem-group">
+    <h3>CHASER (HOSTILE)</h3>
+    <div class="telem-row"><span class="telem-label">X (R-bar):</span><span class="telem-value" id="t-cx">--</span></div>
+    <div class="telem-row"><span class="telem-label">Y (V-bar):</span><span class="telem-value" id="t-cy">--</span></div>
+    <div class="telem-row"><span class="telem-label">Z (H-bar):</span><span class="telem-value" id="t-cz">--</span></div>
+    <div class="telem-row"><span class="telem-label">Range:</span><span class="telem-value" id="t-range">--</span></div>
+    <div class="telem-row"><span class="telem-label">Range Rate:</span><span class="telem-value" id="t-rrate">--</span></div>
+    <div class="telem-row"><span class="telem-label">Roll:</span><span class="telem-value" id="t-roll">--</span></div>
+    <div class="telem-row"><span class="telem-label">Pitch:</span><span class="telem-value" id="t-pitch">--</span></div>
+    <div class="telem-row"><span class="telem-label">Yaw:</span><span class="telem-value" id="t-yaw">--</span></div>
+  </div>
+  <div class="telem-group">
+    <h3>TARGET</h3>
+    <div class="telem-row"><span class="telem-label">Altitude:</span><span class="telem-value" id="t-alt">--</span></div>
+    <div class="telem-row"><span class="telem-label">Velocity:</span><span class="telem-value" id="t-vel">--</span></div>
+    <div class="telem-row"><span class="telem-label">Period:</span><span class="telem-value" id="t-period">--</span></div>
+  </div>
+  <div class="telem-group">
+    <h3>RELATIVE DYNAMICS</h3>
+    <div class="telem-row"><span class="telem-label">dV expended:</span><span class="telem-value" id="t-dv">--</span></div>
+    <div class="telem-row"><span class="telem-label">Rel Velocity:</span><span class="telem-value" id="t-closerate">--</span></div>
+    <div class="telem-row"><span class="telem-label">Phase:</span><span class="telem-value" id="t-phase">--</span></div>
+  </div>
+</div>
+
+<div id="controls-panel">
+  <button class="ctrl-btn" id="btn-play" onclick="togglePlay()">&#9654; PLAY</button>
+  <button class="ctrl-btn" onclick="resetSim()">RESET</button>
+  <span id="time-display">T+00:00:00</span>
+  <div class="slider-container">
+    <label>SPEED</label>
+    <input type="range" id="speed-slider" min="1" max="1000" value="200" oninput="updateSpeed()">
+    <span id="speed-display">200x</span>
+  </div>
+  <button class="ctrl-btn" id="btn-view" onclick="cycleView()">CAM: FREE</button>
+</div>
+
+<div id="threat-bar">
+  <h3>THREAT ASSESSMENT</h3>
+  <div id="threat-level-bar"><div id="threat-fill"></div></div>
+  <div id="threat-text" class="telem-value">NOMINAL</div>
+</div>
+
+<canvas id="attitude-canvas" width="160" height="160" style="position:fixed;bottom:70px;right:12px;z-index:20;pointer-events:none;"></canvas>
+
+<script>
+// ============================================================
+// SCENARIOS - Based on real historical events
+// ============================================================
+const SCENARIOS = [
+  {
+    id: 'kosmos2542',
+    name: 'Kosmos-2542 / USA-245 Inspection',
+    year: '2019-2020',
+    nation: 'russia',
+    nationLabel: 'RUSSIA',
+    altitude: 680,
+    description: 'Kosmos-2542 (Nivelir) maneuvered within close proximity of USA-245 (KH-11 reconnaissance satellite). The Russian inspector satellite was deployed from Kosmos-2541 and performed repeated close approaches, believed to be intelligence-gathering maneuvers against a US spy satellite.',
+    chaserName: 'KOSMOS-2542',
+    targetName: 'USA-245 (KH-11)',
+    phases: [
+      { name: 'PHASING', duration: 120, x0: 50, y0: -80, z0: 5, vx0: -0.08, vy0: 0.12, vz0: 0.005, roll_rate: 0.1, pitch_rate: 0.05, yaw_rate: 0.02 },
+      { name: 'APPROACH', duration: 120, x0: 12, y0: -18, z0: 2, vx0: -0.03, vy0: 0.04, vz0: 0.002, roll_rate: 0.2, pitch_rate: 0.15, yaw_rate: 0.08 },
+      { name: 'INSPECTION', duration: 180, x0: 2, y0: -3, z0: 0.5, vx0: -0.005, vy0: 0.008, vz0: 0.001, roll_rate: 0.5, pitch_rate: 0.4, yaw_rate: 0.3 },
+      { name: 'STATION-KEEP', duration: 180, x0: 0.5, y0: -0.8, z0: 0.15, vx0: -0.001, vy0: 0.002, vz0: 0.0003, roll_rate: 0.8, pitch_rate: 0.6, yaw_rate: 0.5 },
+    ]
+  },
+  {
+    id: 'kosmos2558',
+    name: 'Kosmos-2558 / USA-326 Shadowing',
+    year: '2022',
+    nation: 'russia',
+    nationLabel: 'RUSSIA',
+    altitude: 550,
+    description: 'Kosmos-2558 was launched into a similar orbit as USA-326, a classified NRO satellite launched just weeks prior. US Space Command tracked the Russian satellite maintaining a persistent co-orbital presence, conducting apparent surveillance of the American asset.',
+    chaserName: 'KOSMOS-2558',
+    targetName: 'USA-326 (NRO)',
+    phases: [
+      { name: 'ORBIT INSERT', duration: 100, x0: 80, y0: -120, z0: 8, vx0: -0.15, vy0: 0.2, vz0: 0.008, roll_rate: 0.05, pitch_rate: 0.03, yaw_rate: 0.01 },
+      { name: 'CO-PLANAR ADJ', duration: 120, x0: 20, y0: -35, z0: 3, vx0: -0.04, vy0: 0.06, vz0: 0.003, roll_rate: 0.15, pitch_rate: 0.1, yaw_rate: 0.05 },
+      { name: 'SHADOWING', duration: 180, x0: 5, y0: -8, z0: 1, vx0: -0.008, vy0: 0.012, vz0: 0.001, roll_rate: 0.3, pitch_rate: 0.2, yaw_rate: 0.15 },
+      { name: 'CLOSE PASS', duration: 120, x0: 0.8, y0: -1.2, z0: 0.2, vx0: -0.002, vy0: 0.003, vz0: 0.0005, roll_rate: 0.6, pitch_rate: 0.5, yaw_rate: 0.4 },
+    ]
+  },
+  {
+    id: 'luch',
+    name: 'Luch/Olymp GEO Stalking',
+    year: '2014-2015',
+    nation: 'russia',
+    nationLabel: 'RUSSIA',
+    altitude: 35786,
+    description: 'Russia\'s Luch (Olymp-K) satellite conducted unprecedented proximity operations in geostationary orbit, parking itself between Intelsat 7 and Intelsat 901. This was one of the first documented cases of hostile GEO-stalking, raising concerns about signal interception.',
+    chaserName: 'LUCH (OLYMP-K)',
+    targetName: 'INTELSAT-901',
+    phases: [
+      { name: 'GEO DRIFT', duration: 150, x0: 60, y0: -100, z0: 10, vx0: -0.08, vy0: 0.12, vz0: 0.002, roll_rate: 0.02, pitch_rate: 0.01, yaw_rate: 0.005 },
+      { name: 'SLOT APPROACH', duration: 200, x0: 15, y0: -25, z0: 3, vx0: -0.02, vy0: 0.03, vz0: 0.001, roll_rate: 0.05, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'PARKING', duration: 300, x0: 0.5, y0: -0.8, z0: 0.2, vx0: -0.0005, vy0: 0.001, vz0: 0.0001, roll_rate: 0.01, pitch_rate: 0.008, yaw_rate: 0.005 },
+    ]
+  },
+  {
+    id: 'sj17',
+    name: 'SJ-17 GEO Proximity Ops',
+    year: '2016-2021',
+    nation: 'china',
+    nationLabel: 'CHINA',
+    altitude: 35786,
+    description: 'Shijian-17 (SJ-17) conducted multiple rendezvous and proximity operations in GEO, including with retired Chinese satellites. The satellite demonstrated robotic arm capabilities and is assessed as a dual-use platform with potential co-orbital ASAT applications.',
+    chaserName: 'SJ-17',
+    targetName: 'CHINASAT-5A',
+    phases: [
+      { name: 'TRANSFER', duration: 120, x0: 50, y0: -70, z0: 8, vx0: -0.08, vy0: 0.1, vz0: 0.003, roll_rate: 0.03, pitch_rate: 0.02, yaw_rate: 0.01 },
+      { name: 'APPROACH', duration: 150, x0: 10, y0: -15, z0: 2, vx0: -0.015, vy0: 0.02, vz0: 0.001, roll_rate: 0.1, pitch_rate: 0.08, yaw_rate: 0.05 },
+      { name: 'BERTHING', duration: 200, x0: 1.5, y0: -2, z0: 0.3, vx0: -0.002, vy0: 0.003, vz0: 0.0003, roll_rate: 0.4, pitch_rate: 0.3, yaw_rate: 0.2 },
+      { name: 'GRAPPLE', duration: 120, x0: 0.1, y0: -0.15, z0: 0.03, vx0: -0.0002, vy0: 0.0003, vz0: 0.00003, roll_rate: 0.8, pitch_rate: 0.7, yaw_rate: 0.6 },
+    ]
+  },
+  {
+    id: 'sj21',
+    name: 'SJ-21 Dead Sat Tug',
+    year: '2022',
+    nation: 'china',
+    nationLabel: 'CHINA',
+    altitude: 35786,
+    description: 'Shijian-21 (SJ-21) grappled a defunct BeiDou navigation satellite and towed it to a graveyard orbit 300km above GEO. While characterized as "debris removal," the capability to capture and relocate satellites has profound ASAT implications. First confirmed GEO towing.',
+    chaserName: 'SJ-21',
+    targetName: 'BEIDOU-2 G2',
+    phases: [
+      { name: 'RENDEZVOUS', duration: 120, x0: 40, y0: -60, z0: 5, vx0: -0.06, vy0: 0.08, vz0: 0.002, roll_rate: 0.04, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'APPROACH', duration: 150, x0: 8, y0: -12, z0: 1.5, vx0: -0.01, vy0: 0.015, vz0: 0.001, roll_rate: 0.15, pitch_rate: 0.12, yaw_rate: 0.08 },
+      { name: 'CAPTURE', duration: 120, x0: 0.5, y0: -0.8, z0: 0.1, vx0: -0.001, vy0: 0.0015, vz0: 0.0001, roll_rate: 0.5, pitch_rate: 0.4, yaw_rate: 0.35 },
+      { name: 'TOW', duration: 200, x0: 0.02, y0: -0.03, z0: 0.005, vx0: -0.00003, vy0: 0.00005, vz0: 0.000005, roll_rate: 0.9, pitch_rate: 0.85, yaw_rate: 0.8 },
+    ]
+  },
+  {
+    id: 'asat2007',
+    name: 'SC-19 ASAT Test (FY-1C)',
+    year: '2007',
+    nation: 'china',
+    nationLabel: 'CHINA',
+    altitude: 865,
+    description: 'China destroyed the defunct Fengyun-1C weather satellite with a kinetic kill vehicle at ~8 km/s. Created over 3,500 pieces of trackable debris - the worst debris-generating event in space history. Much debris remains in orbit threatening operational satellites.',
+    chaserName: 'SC-19 KKV',
+    targetName: 'FY-1C (FENGYUN)',
+    phases: [
+      { name: 'BOOST', duration: 40, x0: 120, y0: -200, z0: 30, vx0: -0.6, vy0: 0.9, vz0: -0.06, roll_rate: 2.0, pitch_rate: 1.5, yaw_rate: 0.5 },
+      { name: 'MIDCOURSE', duration: 30, x0: 25, y0: -40, z0: 8, vx0: -0.3, vy0: 0.5, vz0: -0.04, roll_rate: 3.0, pitch_rate: 2.5, yaw_rate: 1.0 },
+      { name: 'TERMINAL', duration: 15, x0: 4, y0: -6, z0: 1, vx0: -0.12, vy0: 0.2, vz0: -0.015, roll_rate: 5.0, pitch_rate: 4.0, yaw_rate: 3.0 },
+      { name: 'INTERCEPT', duration: 5, x0: 0.1, y0: -0.15, z0: 0.02, vx0: -0.05, vy0: 0.08, vz0: -0.005, roll_rate: 10.0, pitch_rate: 8.0, yaw_rate: 6.0 },
+    ]
+  },
+  {
+    id: 'nudol',
+    name: 'Nudol DA-ASAT (Cosmos-1408)',
+    year: '2021',
+    nation: 'russia',
+    nationLabel: 'RUSSIA',
+    altitude: 480,
+    description: 'Russia destroyed Cosmos-1408 using a PL-19 Nudol direct-ascent ASAT missile. Created over 1,500 pieces of trackable debris, forcing ISS crew to shelter. The debris cloud threatened LEO assets for years, drawing international condemnation.',
+    chaserName: 'PL-19 NUDOL KKV',
+    targetName: 'COSMOS-1408',
+    phases: [
+      { name: 'ASCENT', duration: 45, x0: 100, y0: -180, z0: 25, vx0: -0.5, vy0: 0.8, vz0: -0.05, roll_rate: 1.5, pitch_rate: 1.2, yaw_rate: 0.4 },
+      { name: 'MIDCOURSE', duration: 30, x0: 20, y0: -35, z0: 6, vx0: -0.25, vy0: 0.4, vz0: -0.03, roll_rate: 2.5, pitch_rate: 2.0, yaw_rate: 0.8 },
+      { name: 'TERMINAL', duration: 12, x0: 3, y0: -5, z0: 0.8, vx0: -0.1, vy0: 0.16, vz0: -0.01, roll_rate: 6.0, pitch_rate: 5.0, yaw_rate: 3.5 },
+      { name: 'INTERCEPT', duration: 3, x0: 0.05, y0: -0.08, z0: 0.01, vx0: -0.04, vy0: 0.06, vz0: -0.003, roll_rate: 12.0, pitch_rate: 10.0, yaw_rate: 8.0 },
+    ]
+  },
+  {
+    id: 'cosmos2519',
+    name: 'Kosmos-2519 Sub-Sat RPO',
+    year: '2017',
+    nation: 'russia',
+    nationLabel: 'RUSSIA',
+    altitude: 650,
+    description: 'Kosmos-2519 deployed a sub-satellite (Kosmos-2521) which then released its own sub-satellite (Kosmos-2523). The smallest object conducted proximity operations around the parent, demonstrating Russian nesting-doll inspector satellite architecture.',
+    chaserName: 'KOSMOS-2523',
+    targetName: 'KOSMOS-2519',
+    phases: [
+      { name: 'DEPLOYMENT', duration: 60, x0: 1, y0: -2, z0: 0.3, vx0: -0.01, vy0: 0.02, vz0: 0.002, roll_rate: 0.3, pitch_rate: 0.2, yaw_rate: 0.1 },
+      { name: 'SEPARATION', duration: 120, x0: 15, y0: -25, z0: 3, vx0: -0.03, vy0: 0.05, vz0: 0.003, roll_rate: 0.15, pitch_rate: 0.1, yaw_rate: 0.05 },
+      { name: 'RETURN', duration: 150, x0: 4, y0: -6, z0: 0.8, vx0: -0.008, vy0: 0.012, vz0: 0.001, roll_rate: 0.4, pitch_rate: 0.3, yaw_rate: 0.2 },
+      { name: 'INSPECTION', duration: 200, x0: 0.5, y0: -0.8, z0: 0.12, vx0: -0.001, vy0: 0.002, vz0: 0.0002, roll_rate: 0.7, pitch_rate: 0.6, yaw_rate: 0.5 },
+    ]
+  },
+  // ---- CIVILIAN / COMMERCIAL RPOD MISSIONS ----
+  {
+    id: 'mev1',
+    name: 'MEV-1 / Intelsat-901 Docking',
+    year: '2020',
+    nation: 'commercial',
+    nationLabel: 'NORTHROP GRUMMAN',
+    altitude: 35786,
+    description: 'Northrop Grumman\'s Mission Extension Vehicle 1 (MEV-1) performed the first commercial docking with a client satellite in GEO, attaching to Intelsat-901 to extend its operational life by 5 years. MEV-1 used a stinger-style docking mechanism inserted into the client\'s liquid apogee engine nozzle. This was the first commercial life-extension servicing mission in history.',
+    chaserName: 'MEV-1',
+    targetName: 'INTELSAT-901',
+    phases: [
+      { name: 'GEO APPROACH', duration: 180, x0: 40, y0: -60, z0: 5, vx0: -0.04, vy0: 0.06, vz0: 0.001, roll_rate: 0.02, pitch_rate: 0.01, yaw_rate: 0.005 },
+      { name: 'INSPECTION', duration: 200, x0: 5, y0: -8, z0: 1, vx0: -0.005, vy0: 0.008, vz0: 0.0005, roll_rate: 0.05, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'FINAL APPROACH', duration: 150, x0: 0.5, y0: -0.8, z0: 0.1, vx0: -0.0005, vy0: 0.001, vz0: 0.0001, roll_rate: 0.02, pitch_rate: 0.015, yaw_rate: 0.01 },
+      { name: 'DOCKING', duration: 120, x0: 0.008, y0: -0.012, z0: 0.002, vx0: -0.00002, vy0: 0.00003, vz0: 0.000005, roll_rate: 0.005, pitch_rate: 0.003, yaw_rate: 0.002 },
+    ]
+  },
+  {
+    id: 'mev2',
+    name: 'MEV-2 / Intelsat-10-02 Docking',
+    year: '2021',
+    nation: 'commercial',
+    nationLabel: 'NORTHROP GRUMMAN',
+    altitude: 35786,
+    description: 'MEV-2 docked with the active, operational Intelsat-10-02 satellite in GEO — the first time a servicing vehicle attached to a satellite that was still in active commercial service. Unlike MEV-1 which serviced a decommissioned satellite, this demonstrated servicing of live, revenue-generating assets, a critical milestone for the on-orbit servicing industry.',
+    chaserName: 'MEV-2',
+    targetName: 'INTELSAT 10-02',
+    phases: [
+      { name: 'CO-LOCATION', duration: 150, x0: 30, y0: -50, z0: 4, vx0: -0.03, vy0: 0.05, vz0: 0.001, roll_rate: 0.02, pitch_rate: 0.015, yaw_rate: 0.008 },
+      { name: 'SURVEY', duration: 180, x0: 3, y0: -5, z0: 0.5, vx0: -0.003, vy0: 0.005, vz0: 0.0003, roll_rate: 0.04, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'CLOSING', duration: 120, x0: 0.3, y0: -0.5, z0: 0.06, vx0: -0.0003, vy0: 0.0005, vz0: 0.00005, roll_rate: 0.015, pitch_rate: 0.01, yaw_rate: 0.008 },
+      { name: 'DOCKING', duration: 100, x0: 0.005, y0: -0.008, z0: 0.001, vx0: -0.00001, vy0: 0.00002, vz0: 0.000003, roll_rate: 0.003, pitch_rate: 0.002, yaw_rate: 0.001 },
+    ]
+  },
+  {
+    id: 'elsa_d',
+    name: 'ELSA-d Debris Capture Demo',
+    year: '2021-2023',
+    nation: 'commercial',
+    nationLabel: 'ASTROSCALE',
+    altitude: 550,
+    description: 'Astroscale\'s ELSA-d (End-of-Life Services by Astroscale - demonstration) tested key technologies for debris removal: a servicer spacecraft repeatedly released and recaptured a client satellite using a magnetic docking mechanism. The mission demonstrated autonomous RPO, tumbling object capture, and client search/inspection — foundational capabilities for future debris removal services.',
+    chaserName: 'ELSA-d SERVICER',
+    targetName: 'ELSA-d CLIENT',
+    phases: [
+      { name: 'RELEASE', duration: 60, x0: 0.1, y0: -0.15, z0: 0.02, vx0: -0.005, vy0: 0.008, vz0: 0.001, roll_rate: 0.1, pitch_rate: 0.08, yaw_rate: 0.05 },
+      { name: 'SEPARATION', duration: 120, x0: 8, y0: -12, z0: 1.5, vx0: -0.01, vy0: 0.015, vz0: 0.001, roll_rate: 0.05, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'SEARCH', duration: 150, x0: 3, y0: -5, z0: 0.6, vx0: -0.004, vy0: 0.006, vz0: 0.0005, roll_rate: 0.08, pitch_rate: 0.06, yaw_rate: 0.04 },
+      { name: 'RECAPTURE', duration: 100, x0: 0.05, y0: -0.08, z0: 0.01, vx0: -0.0001, vy0: 0.0002, vz0: 0.00002, roll_rate: 0.02, pitch_rate: 0.015, yaw_rate: 0.01 },
+    ]
+  },
+  {
+    id: 'adras_j',
+    name: 'ADRAS-J Debris Inspection',
+    year: '2024',
+    nation: 'commercial',
+    nationLabel: 'ASTROSCALE',
+    altitude: 600,
+    description: 'Astroscale\'s ADRAS-J (Active Debris Removal by Astroscale - Japan) performed the world\'s first RPO mission to characterize a real piece of space debris — a Japanese H-2A upper stage left in orbit since 2009. The mission autonomously approached the tumbling, uncooperative object to within meters, capturing detailed imagery for planning future debris removal. This was a major milestone for active debris removal.',
+    chaserName: 'ADRAS-J',
+    targetName: 'H-2A R/B (2009)',
+    phases: [
+      { name: 'FAR RENDEZVOUS', duration: 120, x0: 50, y0: -80, z0: 6, vx0: -0.08, vy0: 0.12, vz0: 0.003, roll_rate: 0.03, pitch_rate: 0.02, yaw_rate: 0.01 },
+      { name: 'APPROACH', duration: 150, x0: 8, y0: -12, z0: 2, vx0: -0.01, vy0: 0.015, vz0: 0.001, roll_rate: 0.06, pitch_rate: 0.04, yaw_rate: 0.03 },
+      { name: 'CHARACTERIZATION', duration: 200, x0: 0.5, y0: -0.8, z0: 0.15, vx0: -0.0005, vy0: 0.001, vz0: 0.0001, roll_rate: 0.08, pitch_rate: 0.06, yaw_rate: 0.04 },
+      { name: 'CLOSE FLYBY', duration: 100, x0: 0.03, y0: -0.05, z0: 0.008, vx0: -0.00005, vy0: 0.0001, vz0: 0.00001, roll_rate: 0.03, pitch_rate: 0.02, yaw_rate: 0.015 },
+    ]
+  },
+  {
+    id: 'mrsv',
+    name: 'MRV / IS-40e Robotic Servicing',
+    year: '2024',
+    nation: 'commercial',
+    nationLabel: 'NORTHROP GRUMMAN',
+    altitude: 35786,
+    description: 'Northrop Grumman\'s Mission Robotic Vehicle (MRV), the next evolution beyond MEV, features robotic arms for satellite inspection, refueling, relocation, and repair in GEO. Paired with Mission Extension Pods (MEPs) that can be installed on client satellites, MRV represents the transition from life-extension to full on-orbit servicing capability.',
+    chaserName: 'MRV',
+    targetName: 'IS-40e',
+    phases: [
+      { name: 'TRANSIT', duration: 150, x0: 50, y0: -70, z0: 6, vx0: -0.05, vy0: 0.07, vz0: 0.002, roll_rate: 0.02, pitch_rate: 0.015, yaw_rate: 0.008 },
+      { name: 'INSPECTION', duration: 200, x0: 5, y0: -8, z0: 1, vx0: -0.005, vy0: 0.008, vz0: 0.0005, roll_rate: 0.04, pitch_rate: 0.03, yaw_rate: 0.02 },
+      { name: 'BERTHING', duration: 150, x0: 0.3, y0: -0.5, z0: 0.05, vx0: -0.0003, vy0: 0.0005, vz0: 0.00005, roll_rate: 0.015, pitch_rate: 0.01, yaw_rate: 0.008 },
+      { name: 'MEP INSTALL', duration: 120, x0: 0.01, y0: -0.015, z0: 0.002, vx0: -0.00002, vy0: 0.00003, vz0: 0.000005, roll_rate: 0.005, pitch_rate: 0.003, yaw_rate: 0.002 },
+    ]
+  },
+];
+
+// ============================================================
+// WEBGL SETUP
+// ============================================================
+const canvas = document.getElementById('canvas3d');
+const gl = canvas.getContext('webgl2', {antialias:true}) || canvas.getContext('webgl', {antialias:true});
+if (!gl) alert('WebGL not supported');
+
+let W, H;
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Matrix math
+function mat4() { return new Float32Array(16); }
+function identity(m) { m.fill(0); m[0]=m[5]=m[10]=m[15]=1; return m; }
+function perspective(fov, aspect, near, far) {
+  const m = mat4(); const f = 1/Math.tan(fov/2);
+  m[0]=f/aspect; m[5]=f; m[10]=(far+near)/(near-far); m[11]=-1;
+  m[14]=2*far*near/(near-far); return m;
+}
+function lookAt(eye, center, up) {
+  const m = mat4();
+  let zx=eye[0]-center[0], zy=eye[1]-center[1], zz=eye[2]-center[2];
+  let len = Math.sqrt(zx*zx+zy*zy+zz*zz)||1; zx/=len; zy/=len; zz/=len;
+  let xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
+  len=Math.sqrt(xx*xx+xy*xy+xz*xz)||1; xx/=len; xy/=len; xz/=len;
+  let yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+  m[0]=xx;m[1]=yx;m[2]=zx;m[4]=xy;m[5]=yy;m[6]=zy;m[8]=xz;m[9]=yz;m[10]=zz;
+  m[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
+  m[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
+  m[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
+  m[15]=1; return m;
+}
+function multiply(a, b) {
+  const m = mat4();
+  for(let i=0;i<4;i++) for(let j=0;j<4;j++) {
+    m[j*4+i]=0;
+    for(let k=0;k<4;k++) m[j*4+i]+=a[k*4+i]*b[j*4+k];
+  } return m;
+}
+function rotateX(m, a) {
+  const r=mat4(); identity(r); const c=Math.cos(a), s=Math.sin(a);
+  r[5]=c; r[6]=s; r[9]=-s; r[10]=c; return multiply(m, r);
+}
+function rotateY(m, a) {
+  const r=mat4(); identity(r); const c=Math.cos(a), s=Math.sin(a);
+  r[0]=c; r[2]=-s; r[8]=s; r[10]=c; return multiply(m, r);
+}
+function rotateZ(m, a) {
+  const r=mat4(); identity(r); const c=Math.cos(a), s=Math.sin(a);
+  r[0]=c; r[1]=s; r[4]=-s; r[5]=c; return multiply(m, r);
+}
+function translate(m, tx, ty, tz) {
+  const r=mat4(); identity(r); r[12]=tx; r[13]=ty; r[14]=tz; return multiply(m, r);
+}
+function scaleMat(m, sx, sy, sz) {
+  const r=mat4(); identity(r); r[0]=sx; r[5]=sy; r[10]=sz; return multiply(m, r);
+}
+
+// Shaders
+const vsSource = `
+  attribute vec3 aPos;
+  attribute vec3 aColor;
+  uniform mat4 uMVP;
+  uniform float uPointSize;
+  varying vec3 vColor;
+  void main() {
+    vColor = aColor;
+    gl_Position = uMVP * vec4(aPos, 1.0);
+    gl_PointSize = uPointSize;
+  }
+`;
+const fsPoint = `
+  precision mediump float;
+  varying vec3 vColor;
+  uniform float uAlpha;
+  void main() {
+    float d = length(gl_PointCoord - vec2(0.5));
+    if(d > 0.5) discard;
+    float glow = 1.0 - d * 1.5;
+    gl_FragColor = vec4(vColor * glow, uAlpha * glow);
+  }
+`;
+const fsLine = `
+  precision mediump float;
+  varying vec3 vColor;
+  uniform float uAlpha;
+  void main() { gl_FragColor = vec4(vColor, uAlpha); }
+`;
+
+function createShader(src, type) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+function createProgram(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, createShader(vs, gl.VERTEX_SHADER));
+  gl.attachShader(p, createShader(fs, gl.FRAGMENT_SHADER));
+  gl.linkProgram(p); return p;
+}
+
+const pointProg = createProgram(vsSource, fsPoint);
+const lineProg = createProgram(vsSource, fsLine);
+
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+gl.enable(gl.DEPTH_TEST);
+gl.depthFunc(gl.LEQUAL);
+
+// ============================================================
+// SIMULATION STATE
+// ============================================================
+let simState = {
+  running: false,
+  time: 0,
+  speed: 200,
+  scenario: null,
+  phaseIndex: 0,
+  phaseTime: 0,
+  cx: 0, cy: 0, cz: 0,
+  cvx: 0, cvy: 0, cvz: 0,
+  roll: 0, pitch: 0, yaw: 0,
+  rollRate: 0, pitchRate: 0, yawRate: 0,
+  chaserTrail: [],
+  maxTrail: 3000,
+  camDist: 30,
+  camTheta: 0.3,
+  camPhi: 0.9,
+  viewMode: 0,
+  debris: [],
+  showTrails: true,
+  showGrid: true,
+  showVectors: true,
+  prevRange: null,
+  totalDv: 0,
+  camTarget: [0,0,0], // smoothed camera target
+};
+
+// Camera interaction
+let isDragging = false, lastMX = 0, lastMY = 0;
+canvas.addEventListener('mousedown', e => { isDragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+canvas.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mouseleave', () => isDragging = false);
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  simState.camTheta += (e.clientX - lastMX) * 0.005;
+  simState.camPhi = Math.max(0.1, Math.min(Math.PI-0.1, simState.camPhi + (e.clientY - lastMY) * 0.005));
+  lastMX = e.clientX; lastMY = e.clientY;
+});
+canvas.addEventListener('wheel', e => {
+  simState.camDist *= (1 + e.deltaY * 0.001);
+  simState.camDist = Math.max(0.5, Math.min(500, simState.camDist));
+  e.preventDefault();
+}, { passive: false });
+
+// ============================================================
+// CW EQUATIONS (Clohessy-Wiltshire)
+// ============================================================
+function cwPropagate(state, dt, n) {
+  const { cx, cy, cz, cvx, cvy, cvz } = state;
+  const nt = n * dt;
+  const sn = Math.sin(nt), cn = Math.cos(nt);
+
+  const x = (4 - 3*cn)*cx + sn/n*cvx + 2/n*(1-cn)*cvy;
+  const y = 6*(sn - nt)*cx + cy - 2/n*(1-cn)*cvx + (4*sn - 3*nt)/n*cvy;
+  const z = cz*cn + cvz/n*sn;
+
+  const vx = 3*n*sn*cx + cn*cvx + 2*sn*cvy;
+  const vy = -6*n*(1-cn)*cx - 2*sn*cvx + (4*cn - 3)*cvy;
+  const vz = -cz*n*sn + cvz*cn;
+
+  return { cx: x, cy: y, cz: z, cvx: vx, cvy: vy, cvz: vz };
+}
+
+function getMeanMotion(altKm) {
+  const mu = 398600.4418;
+  const R = 6371 + altKm;
+  return Math.sqrt(mu / (R * R * R));
+}
+
+// ============================================================
+// SCENARIO MANAGEMENT
+// ============================================================
+function loadScenario(scenarioId) {
+  const sc = SCENARIOS.find(s => s.id === scenarioId);
+  if (!sc) return;
+  simState.scenario = sc;
+  simState.phaseIndex = 0;
+  simState.phaseTime = 0;
+  simState.time = 0;
+  simState.totalDv = 0;
+  simState.debris = [];
+  simState.chaserTrail = [];
+  simState.prevRange = null;
+
+  const phase = sc.phases[0];
+  simState.cx = phase.x0;
+  simState.cy = phase.y0;
+  simState.cz = phase.z0;
+  simState.cvx = phase.vx0;
+  simState.cvy = phase.vy0;
+  simState.cvz = phase.vz0;
+  simState.roll = 0;
+  simState.pitch = 0;
+  simState.yaw = 0;
+  simState.rollRate = phase.roll_rate;
+  simState.pitchRate = phase.pitch_rate;
+  simState.yawRate = phase.yaw_rate;
+
+  // Auto-fit camera to see the full scene
+  const maxRange = Math.sqrt(phase.x0**2 + phase.y0**2 + phase.z0**2);
+  simState.camDist = maxRange * 2.5;
+  simState.camTarget = [simState.cx * 0.4, simState.cz * 0.4, simState.cy * 0.4];
+
+  document.getElementById('scenario-description').textContent = sc.description;
+  document.querySelectorAll('.scenario-btn').forEach(b => b.classList.toggle('active', b.dataset.id === scenarioId));
+
+  // Update phase display
+  document.getElementById('phase-name-display').textContent = phase.name;
+  document.getElementById('phase-sub-display').textContent = sc.chaserName + ' → ' + sc.targetName;
+
+  updateTelemetry();
+}
+
+function transitionPhase() {
+  const sc = simState.scenario;
+  if (!sc || simState.phaseIndex >= sc.phases.length - 1) {
+    // Loop back to last phase (station-keep / final)
+    simState.phaseTime = 0;
+    return;
+  }
+  simState.phaseIndex++;
+  simState.phaseTime = 0;
+  const phase = sc.phases[simState.phaseIndex];
+
+  const dvx = phase.vx0 - simState.cvx;
+  const dvy = phase.vy0 - simState.cvy;
+  const dvz = phase.vz0 - simState.cvz;
+  simState.totalDv += Math.sqrt(dvx*dvx + dvy*dvy + dvz*dvz) * 1000;
+
+  simState.cx = phase.x0;
+  simState.cy = phase.y0;
+  simState.cz = phase.z0;
+  simState.cvx = phase.vx0;
+  simState.cvy = phase.vy0;
+  simState.cvz = phase.vz0;
+  simState.rollRate = phase.roll_rate;
+  simState.pitchRate = phase.pitch_rate;
+  simState.yawRate = phase.yaw_rate;
+
+  // Update phase display
+  document.getElementById('phase-name-display').textContent = phase.name;
+
+  // Zoom camera in for closer phases
+  const maxRange = Math.sqrt(phase.x0**2 + phase.y0**2 + phase.z0**2);
+  simState.camDist = maxRange * 3;
+
+  if (phase.name === 'INTERCEPT') {
+    generateDebris();
+  }
+}
+
+function generateDebris() {
+  simState.debris = [];
+  const count = 300;
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    const speed = 0.3 + Math.random() * 4;
+    simState.debris.push({
+      x: 0, y: 0, z: 0,
+      vx: Math.sin(phi)*Math.cos(theta)*speed*0.05,
+      vy: Math.sin(phi)*Math.sin(theta)*speed*0.05,
+      vz: Math.cos(phi)*speed*0.05,
+      life: 1.0,
+      size: 1 + Math.random() * 3,
+    });
+  }
+}
+
+// ============================================================
+// BUILD UI
+// ============================================================
+const btnContainer = document.getElementById('scenario-buttons');
+SCENARIOS.forEach(sc => {
+  const btn = document.createElement('button');
+  btn.className = 'scenario-btn';
+  btn.dataset.id = sc.id;
+  btn.innerHTML = `<span class="year">${sc.year}</span> <span class="nation ${sc.nation}">[${sc.nationLabel}]</span><br>${sc.name}`;
+  btn.onclick = () => {
+    loadScenario(sc.id);
+    simState.running = true;
+    document.getElementById('btn-play').innerHTML = '&#10074;&#10074; PAUSE';
+    document.getElementById('btn-play').classList.add('active');
+  };
+  btnContainer.appendChild(btn);
+});
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function togglePlay() {
+  simState.running = !simState.running;
+  document.getElementById('btn-play').innerHTML = simState.running ? '&#10074;&#10074; PAUSE' : '&#9654; PLAY';
+  document.getElementById('btn-play').classList.toggle('active', simState.running);
+}
+function resetSim() {
+  if (simState.scenario) loadScenario(simState.scenario.id);
+  simState.running = false;
+  document.getElementById('btn-play').innerHTML = '&#9654; PLAY';
+  document.getElementById('btn-play').classList.remove('active');
+}
+function updateSpeed() {
+  simState.speed = parseInt(document.getElementById('speed-slider').value);
+  document.getElementById('speed-display').textContent = simState.speed + 'x';
+}
+const viewNames = ['FREE', 'CHASE', 'TARGET', 'TOP-DOWN'];
+function cycleView() {
+  simState.viewMode = (simState.viewMode + 1) % 4;
+  document.getElementById('btn-view').textContent = 'CAM: ' + viewNames[simState.viewMode];
+}
+function toggleTrails() {
+  simState.showTrails = !simState.showTrails;
+  document.getElementById('trail-toggle').classList.toggle('on', simState.showTrails);
+}
+function toggleGrid() {
+  simState.showGrid = !simState.showGrid;
+  document.getElementById('grid-toggle').classList.toggle('on', simState.showGrid);
+}
+function toggleVectors() {
+  simState.showVectors = !simState.showVectors;
+  document.getElementById('vector-toggle').classList.toggle('on', simState.showVectors);
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+// Pre-allocate reusable buffers
+const _posBuf = gl.createBuffer();
+const _colBuf = gl.createBuffer();
+
+// Cache uniform/attrib locations
+const _locs = {};
+function getLocs(prog, name) {
+  const key = name + (prog === pointProg ? 'P' : 'L');
+  if (!_locs[key]) {
+    _locs[key] = prog === pointProg || prog === lineProg ? {
+      aPos: gl.getAttribLocation(prog, 'aPos'),
+      aColor: gl.getAttribLocation(prog, 'aColor'),
+      uMVP: gl.getUniformLocation(prog, 'uMVP'),
+      uAlpha: gl.getUniformLocation(prog, 'uAlpha'),
+      uPointSize: gl.getUniformLocation(prog, 'uPointSize'),
+    } : null;
+  }
+  return _locs[key];
+}
+// Init locs
+const _pointLocs = { aPos: gl.getAttribLocation(pointProg,'aPos'), aColor: gl.getAttribLocation(pointProg,'aColor'), uMVP: gl.getUniformLocation(pointProg,'uMVP'), uAlpha: gl.getUniformLocation(pointProg,'uAlpha'), uPointSize: gl.getUniformLocation(pointProg,'uPointSize') };
+const _lineLocs = { aPos: gl.getAttribLocation(lineProg,'aPos'), aColor: gl.getAttribLocation(lineProg,'aColor'), uMVP: gl.getUniformLocation(lineProg,'uMVP'), uAlpha: gl.getUniformLocation(lineProg,'uAlpha'), uPointSize: gl.getUniformLocation(lineProg,'uPointSize') };
+
+function drawPrimitive(prog, mode, positions, colors, alpha, pointSize) {
+  if (positions.length < 3) return;
+  const locs = prog === pointProg ? _pointLocs : _lineLocs;
+
+  gl.useProgram(prog);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, _posBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(locs.aPos);
+  gl.vertexAttribPointer(locs.aPos, 3, gl.FLOAT, false, 0, 0);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, _colBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(locs.aColor);
+  gl.vertexAttribPointer(locs.aColor, 3, gl.FLOAT, false, 0, 0);
+
+  gl.uniformMatrix4fv(locs.uMVP, false, currentMVP);
+  gl.uniform1f(locs.uAlpha, alpha);
+  gl.uniform1f(locs.uPointSize, pointSize || 1);
+  gl.drawArrays(mode, 0, positions.length / 3);
+}
+
+let currentMVP;
+
+function drawLines(positions, colors, alpha) { drawPrimitive(lineProg, gl.LINES, positions, colors, alpha); }
+function drawLineStrip(positions, colors, alpha) { drawPrimitive(lineProg, gl.LINE_STRIP, positions, colors, alpha); }
+function drawPoints(positions, colors, alpha, size) { drawPrimitive(pointProg, gl.POINTS, positions, colors, alpha, size); }
+
+// Satellite wireframe
+function getSatGeo(hw, hh, hd, pw, ph) {
+  const p = [];
+  const c = [[-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],[-hw,-hh,hd],[hw,-hh,hd],[hw,hh,hd],[-hw,hh,hd]];
+  [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([a,b]) => p.push(...c[a],...c[b]));
+  if (pw > 0) {
+    // Solar panels
+    p.push(-hw-pw,ph/2,0, -hw,ph/2,0, -hw,-ph/2,0, -hw-pw,-ph/2,0);
+    p.push(-hw-pw,ph/2,0, -hw-pw,-ph/2,0, -hw,ph/2,0, -hw,-ph/2,0);
+    // cross brace
+    p.push(-hw-pw,ph/2,0, -hw,-ph/2,0, -hw-pw,-ph/2,0, -hw,ph/2,0);
+    p.push(hw,ph/2,0, hw+pw,ph/2,0, hw,-ph/2,0, hw+pw,-ph/2,0);
+    p.push(hw+pw,ph/2,0, hw+pw,-ph/2,0, hw,ph/2,0, hw,-ph/2,0);
+    p.push(hw+pw,ph/2,0, hw,-ph/2,0, hw+pw,-ph/2,0, hw,ph/2,0);
+  }
+  return p;
+}
+
+function drawSatellite(pos, euler, s, color) {
+  // Save and set MVP with model transform
+  const saved = currentMVP;
+  let model = mat4(); identity(model);
+  model = translate(model, pos[0], pos[1], pos[2]);
+  model = rotateZ(model, euler[2]);
+  model = rotateY(model, euler[1]);
+  model = rotateX(model, euler[0]);
+  model = scaleMat(model, s, s, s);
+  currentMVP = multiply(saved, model);
+
+  const geo = getSatGeo(0.8, 0.5, 0.4, 1.5, 0.8);
+  const colors = [];
+  for (let i = 0; i < geo.length/3; i++) colors.push(...color);
+  drawLines(geo, colors, 1.0);
+
+  currentMVP = saved;
+
+  // Glowing center point
+  drawPoints([pos[0],pos[1],pos[2]], [...color], 1.0, 10);
+  // Glow halo
+  drawPoints([pos[0],pos[1],pos[2]], [...color], 0.3, 20);
+}
+
+function drawAxes(len) {
+  drawLines(
+    [0,0,0, len,0,0, 0,0,0, 0,len,0, 0,0,0, 0,0,len],
+    [1,0.3,0.3, 1,0.3,0.3, 0.3,1,0.3, 0.3,1,0.3, 0.3,0.3,1, 0.3,0.3,1],
+    0.6
+  );
+}
+
+function drawGrid(size, divisions) {
+  const positions = [], colors = [];
+  const step = size / divisions;
+  for (let i = -divisions; i <= divisions; i++) {
+    const p = i * step;
+    positions.push(p, 0, -size, p, 0, size, -size, 0, p, size, 0, p);
+    const c = i === 0 ? [0.15,0.4,0.25] : [0.04,0.12,0.08];
+    colors.push(...c,...c,...c,...c);
+  }
+  drawLines(positions, colors, 0.35);
+}
+
+function drawRangeRings(radii) {
+  radii.forEach(r => {
+    const p = [], c = [];
+    const segs = 64;
+    for (let i = 0; i < segs; i++) {
+      const a1 = (i/segs)*Math.PI*2, a2 = ((i+1)/segs)*Math.PI*2;
+      p.push(Math.cos(a1)*r, 0, Math.sin(a1)*r, Math.cos(a2)*r, 0, Math.sin(a2)*r);
+      const col = r < 1 ? [0.8,0.15,0.15] : r < 5 ? [0.6,0.4,0.1] : [0.1,0.3,0.2];
+      c.push(...col,...col);
+    }
+    drawLines(p, c, 0.25);
+  });
+}
+
+// ============================================================
+// ATTITUDE INDICATOR
+// ============================================================
+const attCanvas = document.getElementById('attitude-canvas');
+const attCtx = attCanvas.getContext('2d');
+
+function drawAttitudeIndicator(roll, pitch, yaw) {
+  const w=160, h=160, cx=w/2, cy=h/2, r=60;
+  attCtx.clearRect(0,0,w,h);
+
+  attCtx.fillStyle = 'rgba(0,10,5,0.9)';
+  attCtx.strokeStyle = '#00ff8844';
+  attCtx.lineWidth = 1;
+  attCtx.beginPath(); attCtx.arc(cx,cy,r+10,0,Math.PI*2); attCtx.fill(); attCtx.stroke();
+
+  attCtx.save();
+  attCtx.translate(cx, cy);
+  attCtx.rotate(-roll);
+
+  const pitchOffset = pitch * r / (Math.PI/2);
+  attCtx.beginPath(); attCtx.rect(-r,-r,r*2,r*2); attCtx.clip();
+
+  attCtx.fillStyle = '#001833';
+  attCtx.fillRect(-r,-r,r*2,r+pitchOffset);
+  attCtx.fillStyle = '#1a0800';
+  attCtx.fillRect(-r,pitchOffset,r*2,r-pitchOffset);
+
+  attCtx.strokeStyle = '#00ff88';
+  attCtx.lineWidth = 1.5;
+  attCtx.beginPath(); attCtx.moveTo(-r,pitchOffset); attCtx.lineTo(r,pitchOffset); attCtx.stroke();
+
+  attCtx.strokeStyle = '#00ff8866';
+  attCtx.lineWidth = 0.5;
+  for (let deg=-30;deg<=30;deg+=10) {
+    if (deg===0) continue;
+    const y = pitchOffset - deg*r/45;
+    const lw = Math.abs(deg)===30?15:25;
+    attCtx.beginPath(); attCtx.moveTo(-lw,y); attCtx.lineTo(lw,y); attCtx.stroke();
+  }
+  attCtx.restore();
+
+  attCtx.strokeStyle = '#ffaa00'; attCtx.lineWidth = 2;
+  attCtx.beginPath(); attCtx.moveTo(cx-20,cy); attCtx.lineTo(cx-8,cy); attCtx.stroke();
+  attCtx.beginPath(); attCtx.moveTo(cx+8,cy); attCtx.lineTo(cx+20,cy); attCtx.stroke();
+  attCtx.beginPath(); attCtx.arc(cx,cy,3,0,Math.PI*2); attCtx.stroke();
+
+  attCtx.fillStyle = '#00ff88';
+  attCtx.font = '9px Courier New';
+  attCtx.textAlign = 'center';
+  const yawDeg = ((yaw*180/Math.PI)%360+360)%360;
+  attCtx.fillText(`HDG ${yawDeg.toFixed(0)}deg`, cx, h-5);
+  attCtx.fillText('ATT', cx, 14);
+}
+
+// ============================================================
+// STARS (static)
+// ============================================================
+const starPositions = [], starColors = [];
+for (let i = 0; i < 800; i++) {
+  const theta = Math.random()*Math.PI*2, phi = Math.random()*Math.PI;
+  const r = 400;
+  starPositions.push(r*Math.sin(phi)*Math.cos(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.sin(theta));
+  const b = 0.3+Math.random()*0.7;
+  starColors.push(b, b, b*0.95);
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+let lastTime = 0;
+let frameCount = 0;
+
+function update(dt) {
+  if (!simState.running || !simState.scenario) return;
+
+  const sc = simState.scenario;
+  const n = getMeanMotion(sc.altitude);
+  const simDt = dt * simState.speed;
+  simState.time += simDt;
+  simState.phaseTime += simDt;
+
+  const currentPhase = sc.phases[simState.phaseIndex];
+  if (simState.phaseTime >= currentPhase.duration) {
+    transitionPhase();
+  }
+
+  // CW propagation (substep for stability at high speeds)
+  const steps = Math.max(1, Math.ceil(simDt / 2));
+  const subDt = simDt / steps;
+  for (let i = 0; i < steps; i++) {
+    const ns = cwPropagate(simState, subDt, n);
+    simState.cx = ns.cx; simState.cy = ns.cy; simState.cz = ns.cz;
+    simState.cvx = ns.cvx; simState.cvy = ns.cvy; simState.cvz = ns.cvz;
+  }
+
+  // Attitude - chaser points sensors toward target (0,0,0)
+  // Compute look-at angles from chaser to target
+  const dx = -simState.cx, dy = -simState.cy, dz = -simState.cz;
+  const dRange = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+  const targetYaw = Math.atan2(dy, dx);
+  const targetPitch = -Math.asin(dz / dRange);
+  const targetRoll = simState.time * 0.0002; // slow sensor-sweep roll
+
+  // Smooth attitude slew toward target-pointing (realistic ADCS response)
+  const slewRate = 0.08;
+  simState.yaw += (targetYaw - simState.yaw) * slewRate;
+  simState.pitch += (targetPitch - simState.pitch) * slewRate;
+  simState.roll += (targetRoll - simState.roll) * slewRate;
+
+  // Debris
+  simState.debris.forEach(d => {
+    d.x += d.vx * dt; d.y += d.vy * dt; d.z += d.vz * dt;
+    d.life -= dt * 0.15;
+  });
+  simState.debris = simState.debris.filter(d => d.life > 0);
+
+  // Trail
+  if (frameCount % 2 === 0) {
+    simState.chaserTrail.push([simState.cx, simState.cz, simState.cy]);
+    if (simState.chaserTrail.length > simState.maxTrail) simState.chaserTrail.shift();
+  }
+
+  // Auto-zoom: camera tracks the range so motion is always visible
+  const range = Math.sqrt(simState.cx*simState.cx + simState.cy*simState.cy + simState.cz*simState.cz);
+  const idealDist = Math.max(1.5, range * 2.2);
+  simState.camDist += (idealDist - simState.camDist) * 0.15;
+
+  // Smooth camera target - look at midpoint between target and chaser
+  const midX = simState.cx * 0.4;
+  const midY = simState.cz * 0.4;
+  const midZ = simState.cy * 0.4;
+  simState.camTarget[0] += (midX - simState.camTarget[0]) * 0.12;
+  simState.camTarget[1] += (midY - simState.camTarget[1]) * 0.12;
+  simState.camTarget[2] += (midZ - simState.camTarget[2]) * 0.12;
+
+  // Slow auto-orbit when not dragging
+  if (!isDragging) {
+    simState.camTheta += dt * 0.08;
+  }
+}
+
+function render() {
+  gl.clearColor(0.005, 0.01, 0.008, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  const proj = perspective(Math.PI/4, W/H, 0.01, 2000);
+  const s = simState;
+
+  let eye, center, up = [0, 1, 0];
+  const ct = s.camTarget;
+
+  switch(s.viewMode) {
+    case 0: // Free orbit around midpoint
+      eye = [
+        ct[0] + s.camDist * Math.sin(s.camPhi) * Math.cos(s.camTheta),
+        ct[1] + s.camDist * Math.cos(s.camPhi),
+        ct[2] + s.camDist * Math.sin(s.camPhi) * Math.sin(s.camTheta)
+      ];
+      center = ct;
+      break;
+    case 1: // Chase cam
+      const cd = Math.max(2, s.camDist * 0.3);
+      eye = [s.cx + cd, s.cz + cd*0.4, s.cy - cd*0.3];
+      center = [0, 0, 0];
+      break;
+    case 2: // Target cam
+      const td = Math.max(1, Math.sqrt(s.cx*s.cx+s.cy*s.cy+s.cz*s.cz) * 0.15);
+      eye = [td*0.5, td*0.3, td*0.5];
+      center = [s.cx, s.cz, s.cy];
+      break;
+    case 3: // Top-down
+      eye = [ct[0], s.camDist, ct[2]+0.01];
+      center = ct;
+      break;
+  }
+
+  const view = lookAt(eye, center, up);
+  currentMVP = multiply(proj, view);
+
+  // Stars (background, no depth write)
+  gl.depthMask(false);
+  drawPoints(starPositions, starColors, 0.5, 1.5);
+  gl.depthMask(true);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+  // Grid
+  if (s.showGrid) {
+    const gridSize = Math.max(5, s.camDist * 0.6);
+    drawGrid(gridSize, 20);
+  }
+
+  // Axes
+  drawAxes(Math.max(1, s.camDist * 0.1));
+
+  // Range rings
+  const range = Math.sqrt(s.cx*s.cx + s.cy*s.cy + s.cz*s.cz);
+  if (range > 0.05) {
+    const rings = [0.1, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(r => r < s.camDist * 0.8 && r < range * 3);
+    drawRangeRings(rings);
+  }
+
+  if (s.scenario) {
+    // Satellite scale based on camera distance
+    const satScale = Math.max(0.15, Math.min(3, s.camDist * 0.025));
+
+    // Target (at LVLH origin) - blue
+    // Target: 3-axis stabilized, slow orbit-rate yaw (nadir-pointing)
+    const targetOrbitRate = getMeanMotion(s.scenario.altitude);
+    drawSatellite([0,0,0], [0, s.time * targetOrbitRate * 0.01, 0], satScale, [0.2, 0.6, 1.0]);
+
+    // Chaser (hostile) - red - note: swap y/z for display
+    const chaserPos = [s.cx, s.cz, s.cy];
+    drawSatellite(chaserPos, [s.roll, s.pitch, s.yaw], satScale*0.7, [1.0, 0.15, 0.15]);
+
+    // Range line
+    if (s.showVectors) {
+      drawLines([0,0,0, ...chaserPos], [0.4,0.4,0.15, 0.4,0.4,0.15], 0.4);
+
+      // Velocity vector
+      const vScale = Math.max(100, s.camDist * 20);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawLines(
+        [...chaserPos, chaserPos[0]+s.cvx*vScale, chaserPos[1]+s.cvz*vScale, chaserPos[2]+s.cvy*vScale],
+        [1,0.6,0, 1,0.8,0.2], 0.9
+      );
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
+
+    // Trail
+    if (s.showTrails && s.chaserTrail.length > 1) {
+      const tp = [], tc = [];
+      s.chaserTrail.forEach((p, i) => {
+        tp.push(p[0], p[1], p[2]);
+        const fade = i / s.chaserTrail.length;
+        tc.push(1*fade, 0.15*fade, 0.05*fade);
+      });
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawLineStrip(tp, tc, 0.7);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
+
+    // Debris
+    if (s.debris.length > 0) {
+      const dp = [], dc = [];
+      s.debris.forEach(d => {
+        dp.push(d.x, d.z, d.y);
+        dc.push(1, 0.6*d.life, 0.1*d.life);
+      });
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      drawPoints(dp, dc, 0.9, 3);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    }
+
+    // Labels (draw as larger points near satellites)
+    // Target label indicator
+    drawPoints([0, 2*satScale, 0], [0.2,0.6,1.0], 0.6, 4);
+    drawPoints([chaserPos[0], chaserPos[1]+2*satScale, chaserPos[2]], [1,0.15,0.15], 0.6, 4);
+  }
+}
+
+function updateTelemetry() {
+  const s = simState;
+  if (!s.scenario) return;
+
+  const range = Math.sqrt(s.cx*s.cx + s.cy*s.cy + s.cz*s.cz);
+
+  document.getElementById('t-cx').textContent = s.cx.toFixed(3) + ' km';
+  document.getElementById('t-cy').textContent = s.cy.toFixed(3) + ' km';
+  document.getElementById('t-cz').textContent = s.cz.toFixed(3) + ' km';
+
+  if (range < 1) {
+    document.getElementById('t-range').textContent = (range*1000).toFixed(1) + ' m';
+  } else {
+    document.getElementById('t-range').textContent = range.toFixed(3) + ' km';
+  }
+
+  const rangeClass = range < 1 ? ' critical' : range < 5 ? ' warning' : '';
+  document.getElementById('t-range').className = 'telem-value' + rangeClass;
+
+  // Range rate
+  if (s.prevRange !== null) {
+    const rangeRate = (range - s.prevRange) / 0.1; // per telemetry update interval
+    const rrMs = rangeRate * 1000;
+    const rrEl = document.getElementById('t-rrate');
+    if (rangeRate < -0.0001) {
+      rrEl.textContent = rrMs.toFixed(2) + ' m/s (CLOSING)';
+      rrEl.className = 'telem-value warning';
+    } else if (rangeRate > 0.0001) {
+      rrEl.textContent = '+' + rrMs.toFixed(2) + ' m/s (OPENING)';
+      rrEl.className = 'telem-value';
+    } else {
+      rrEl.textContent = '~0 m/s (HOLDING)';
+      rrEl.className = 'telem-value';
+    }
+  }
+  s.prevRange = range;
+
+  document.getElementById('t-roll').textContent = ((s.roll*180/Math.PI)%360).toFixed(1) + ' deg';
+  document.getElementById('t-pitch').textContent = ((s.pitch*180/Math.PI)%360).toFixed(1) + ' deg';
+  document.getElementById('t-yaw').textContent = ((s.yaw*180/Math.PI)%360).toFixed(1) + ' deg';
+
+  const alt = s.scenario.altitude;
+  const mu = 398600.4418;
+  const R = 6371 + alt;
+  const v = Math.sqrt(mu / R);
+  const T = 2 * Math.PI * R / v;
+  document.getElementById('t-alt').textContent = alt + ' km';
+  document.getElementById('t-vel').textContent = v.toFixed(2) + ' km/s';
+  document.getElementById('t-period').textContent = (T/60).toFixed(1) + ' min';
+
+  const phase = s.scenario.phases[s.phaseIndex];
+  const phaseEl = document.getElementById('t-phase');
+  phaseEl.textContent = phase ? phase.name : 'COMPLETE';
+  phaseEl.className = 'telem-value' +
+    (phase && (phase.name==='INTERCEPT'||phase.name==='GRAPPLE') ? ' critical' :
+     phase && (phase.name==='TERMINAL'||phase.name==='CAPTURE'||phase.name==='CLOSE PASS') ? ' warning' : '');
+
+  document.getElementById('t-dv').textContent = s.totalDv.toFixed(1) + ' m/s';
+
+  const relVel = Math.sqrt(s.cvx*s.cvx + s.cvy*s.cvy + s.cvz*s.cvz);
+  document.getElementById('t-closerate').textContent = (relVel*1000).toFixed(2) + ' m/s';
+
+  // Time
+  const totalSec = Math.floor(s.time);
+  const hrs = Math.floor(totalSec/3600);
+  const mins = Math.floor((totalSec%3600)/60);
+  const secs = totalSec%60;
+  document.getElementById('time-display').textContent =
+    `T+${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+
+  // Threat assessment
+  let threat = 0;
+  if (range < 100) threat = 0.1;
+  if (range < 50) threat = 0.2;
+  if (range < 20) threat = 0.35;
+  if (range < 10) threat = 0.5;
+  if (range < 5) threat = 0.65;
+  if (range < 2) threat = 0.8;
+  if (range < 0.5) threat = 0.9;
+  if (range < 0.1) threat = 0.98;
+  if (s.debris.length > 0) threat = 1.0;
+
+  const threatFill = document.getElementById('threat-fill');
+  threatFill.style.width = (threat*100)+'%';
+  threatFill.style.background = threat < 0.3 ? '#00ff88' : threat < 0.6 ? '#ffaa00' : '#ff3333';
+
+  const tt = document.getElementById('threat-text');
+  if (threat < 0.15) { tt.textContent = 'NOMINAL'; tt.className = 'telem-value'; }
+  else if (threat < 0.35) { tt.textContent = 'ELEVATED - PROXIMITY'; tt.className = 'telem-value warning'; }
+  else if (threat < 0.6) { tt.textContent = 'HIGH - CLOSE APPROACH'; tt.className = 'telem-value warning'; }
+  else if (threat < 0.9) { tt.textContent = 'CRITICAL - HOSTILE INTENT'; tt.className = 'telem-value critical'; }
+  else { tt.textContent = s.debris.length > 0 ? 'KINETIC IMPACT' : 'ENGAGEMENT ZONE'; tt.className = 'telem-value critical'; }
+
+  // Phase indicator
+  if (phase) {
+    document.getElementById('phase-name-display').textContent = phase.name;
+    const pct = Math.min(100, (s.phaseTime / phase.duration * 100)).toFixed(0);
+    document.getElementById('phase-sub-display').textContent =
+      s.scenario.chaserName + ' -> ' + s.scenario.targetName + '  [' + pct + '%]';
+  }
+
+  drawAttitudeIndicator(s.roll, s.pitch, s.yaw);
+}
+
+let telemTimer = 0;
+
+function frame() {
+  const now = performance.now();
+  const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.05) : 0.016;
+  lastTime = now;
+  frameCount++;
+
+  try {
+    update(dt);
+    render();
+
+    telemTimer += dt;
+    if (telemTimer > 0.1) {
+      telemTimer = 0;
+      updateTelemetry();
+    }
+  } catch(e) {
+    console.error('Frame error:', e);
+  }
+}
+
+// Start with first scenario loaded and auto-playing
+loadScenario('kosmos2542');
+simState.running = true;
+document.getElementById('btn-play').innerHTML = '&#10074;&#10074; PAUSE';
+document.getElementById('btn-play').classList.add('active');
+
+// Main loop using setInterval for guaranteed execution
+setInterval(frame, 16);
+</script>
+</body>
+</html>
